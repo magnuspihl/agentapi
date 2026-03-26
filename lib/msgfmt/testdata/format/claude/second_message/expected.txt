@@ -1,9 +1,9 @@
 ╭────────────────────────────────────────────╮                                  
-│ ✻ Welcome to Claude Code research preview! │                                  
-│                                            │                                  
-│   /help for help                           │                                  
-│                                            │                                  
-│   cwd: /Users/hugodutka/dev/agentapi      │                                  
+✻ Welcome to Claude Code research preview!
+
+  /help for help
+
+  cwd: /Users/hugodutka/dev/agentapi
 ╰────────────────────────────────────────────╯                                  
                                                                                 
  Tips for getting started:                                                      

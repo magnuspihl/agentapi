@@ -127,6 +127,29 @@ func isClaudeTUIArtifact(line string) bool {
 	return hasBoxChar
 }
 
+// stripClaudeFrameBorders removes the │ TUI frame borders that Claude Code
+// renders at the left and right edges of the terminal. These are visual
+// frame characters at column 0 and the last column, not meaningful content.
+func stripClaudeFrameBorders(lines []string) []string {
+	pipe := "│"
+	for i, line := range lines {
+		// Strip right-edge │ border (and trailing whitespace before it)
+		trimRight := strings.TrimRight(line, " \t")
+		if strings.HasSuffix(trimRight, pipe) {
+			line = strings.TrimRight(trimRight[:len(trimRight)-len(pipe)], " \t")
+		}
+		// Strip left-edge │ border followed by a space (frame + content padding)
+		trimLeft := strings.TrimLeft(line, " \t")
+		if strings.HasPrefix(trimLeft, pipe+" ") {
+			line = trimLeft[len(pipe)+1:]
+		} else if trimLeft == pipe {
+			line = ""
+		}
+		lines[i] = line
+	}
+	return lines
+}
+
 func removeClaudeMessageBox(msg string) string {
 	lines := strings.Split(msg, "\n")
 
@@ -151,6 +174,9 @@ func removeClaudeMessageBox(msg string) string {
 	for len(lines) > 0 && isClaudeTUIArtifact(lines[len(lines)-1]) {
 		lines = lines[:len(lines)-1]
 	}
+
+	// Strip │ frame borders from line edges
+	lines = stripClaudeFrameBorders(lines)
 
 	return strings.Join(lines, "\n")
 }
