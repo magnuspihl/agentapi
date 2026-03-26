@@ -143,6 +143,9 @@ type PTYConversation struct {
 	initialPromptReady bool
 	// initialPromptSent is set to true when the initial prompt has been enqueued to the outbound queue.
 	initialPromptSent bool
+	// lastMessageChangeTime tracks when the agent message content last changed.
+	// Used to prevent baseline refresh during pauses in the agent's streaming response.
+	lastMessageChangeTime time.Time
 }
 
 var _ Conversation = &PTYConversation{}
@@ -204,9 +207,16 @@ func (c *PTYConversation) Start(ctx context.Context) {
 		// compaction, agent restart, or long scrolling).
 		// This runs AFTER snapshotLocked so the current snapshot uses the
 		// existing baseline and the update takes effect on the next tick.
+		//
+		// The lastMessageChangeTime check prevents refreshing during pauses in
+		// the agent's streaming response. Without it, a 2-second pause between
+		// paragraphs would trigger a refresh, causing subsequent diffs to only
+		// capture content after the pause (losing earlier paragraphs).
 		if !c.writingMessage && !c.sendingMessage && len(c.messages) > 0 &&
 			c.messages[len(c.messages)-1].Role == ConversationRoleAgent &&
-			c.isScreenStableLocked() {
+			c.isScreenStableLocked() &&
+			!c.lastMessageChangeTime.IsZero() &&
+			c.cfg.Clock.Since(c.lastMessageChangeTime) > 10*time.Second {
 			c.screenBeforeLastUserMessage = screen
 		}
 
@@ -355,6 +365,7 @@ func (c *PTYConversation) updateLastAgentMessageLocked(screen string, timestamp 
 	if lastAgentMessage.Message == agentMessage {
 		return
 	}
+	c.lastMessageChangeTime = timestamp
 	conversationMessage := ConversationMessage{
 		Message: agentMessage,
 		Role:    ConversationRoleAgent,
