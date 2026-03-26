@@ -206,14 +206,34 @@ func removeClaudeMessageBox(msg string) string {
 		}
 	}
 
-	// Strip leading lines that are garbled separators (dashes with gaps, no box corners)
+	// Strip leading noise: garbled separators and lines before the first ●
 	for len(lines) > 0 && isGarbledSeparator(lines[0]) {
 		lines = lines[1:]
+	}
+	// If the first line doesn't start with ● but a later one does,
+	// strip leading VT100 corruption lines
+	if len(lines) > 0 && !strings.Contains(lines[0], "●") && !strings.Contains(lines[0], "⏺") && !strings.Contains(lines[0], "╭") {
+		for i, line := range lines {
+			if strings.Contains(line, "●") || strings.Contains(line, "⏺") {
+				lines = lines[i:]
+				break
+			}
+		}
 	}
 
 	// Strip trailing lines that are pure TUI artifacts (separators, borders)
 	for len(lines) > 0 && isClaudeTUIArtifact(lines[len(lines)-1]) {
 		lines = lines[:len(lines)-1]
+	}
+	// Strip trailing lines that don't contain meaningful content
+	// (e.g. partial old messages from VT100 corruption)
+	for len(lines) > 0 {
+		trimmed := strings.TrimSpace(lines[len(lines)-1])
+		if trimmed == "" || isGarbledSeparator(lines[len(lines)-1]) {
+			lines = lines[:len(lines)-1]
+			continue
+		}
+		break
 	}
 
 	// Strip │ frame borders from line edges
