@@ -107,29 +107,28 @@ func claudeScreenDiff(oldScreen, newScreen string) string {
 		prefixEnd++
 	}
 
-	// If prefix matching gives a reasonable result (new section is small),
-	// use it directly.
+	// If prefix matching gives a reasonable result, use it directly.
+	// This handles both short and streaming responses well.
 	if prefixEnd <= responseEnd {
 		sectionSize := responseEnd - prefixEnd + 1
-		if sectionSize <= 60 {
-			// Prefix diff is clean enough, use it
+		if sectionSize <= 80 {
 			result := newLines[prefixEnd : responseEnd+1]
 			return trimWhitespaceLines(result)
 		}
+	} else {
+		// prefixEnd > responseEnd means screens are identical up to the response area
+		return ""
 	}
 
-	// Prefix matching returned too much content — fall back to finding
-	// the last ● response marker as the start.
-	responseStart := 0
-	for i := responseEnd; i >= 0; i-- {
+	// Prefix matching returned too much content (>80 lines) — fall back to
+	// finding the last ● response marker as the start. Only search within
+	// the diff section (from prefixEnd onward) to avoid finding old markers.
+	responseStart := prefixEnd
+	for i := responseEnd; i >= prefixEnd; i-- {
 		if strings.Contains(newLines[i], "●") || strings.Contains(newLines[i], "⏺") {
 			responseStart = i
 			break
 		}
-	}
-
-	if responseStart > responseEnd {
-		return ""
 	}
 
 	result := newLines[responseStart : responseEnd+1]
