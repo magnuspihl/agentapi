@@ -193,7 +193,23 @@ func (c *PTYConversation) Start(ctx context.Context) {
 	c.cfg.Clock.TickerFunc(ctx, c.cfg.SnapshotInterval, func() error {
 		c.lock.Lock()
 		screen := c.cfg.AgentIO.ReadScreen()
+
 		c.snapshotLocked(screen)
+
+		// Keep screenBeforeLastUserMessage fresh between conversation turns.
+		// After the agent finishes responding (last message is agent, screen is
+		// stable), update the baseline to the current screen. This prevents
+		// stale baselines from causing screenDiff to return the entire screen
+		// when the terminal content has changed drastically (e.g. after context
+		// compaction, agent restart, or long scrolling).
+		// This runs AFTER snapshotLocked so the current snapshot uses the
+		// existing baseline and the update takes effect on the next tick.
+		if !c.writingMessage && !c.sendingMessage && len(c.messages) > 0 &&
+			c.messages[len(c.messages)-1].Role == ConversationRoleAgent &&
+			c.isScreenStableLocked() {
+			c.screenBeforeLastUserMessage = screen
+		}
+
 		status := c.statusLocked()
 		messages := c.messagesLocked()
 
@@ -302,7 +318,21 @@ func (c *PTYConversation) updateLastAgentMessageLocked(screen string, timestamp 
 	if c.writingMessage {
 		return
 	}
-	agentMessage := screenDiff(c.screenBeforeLastUserMessage, screen, c.cfg.AgentType)
+	rawDiff := screenDiff(c.screenBeforeLastUserMessage, screen, c.cfg.AgentType)
+
+	// Don't overwrite an existing non-empty agent message when the screen diff
+	// is empty. This happens when screenBeforeLastUserMessage is refreshed to
+	// the current screen between turns (to prevent stale baselines), making
+	// subsequent diffs return "" until the screen changes again.
+	shouldCreateNewMessage := len(c.messages) == 0 || c.messages[len(c.messages)-1].Role == ConversationRoleUser
+	if rawDiff == "" && !shouldCreateNewMessage {
+		lastAgentMessage := c.lastMessage(ConversationRoleAgent)
+		if lastAgentMessage.Message != "" {
+			return
+		}
+	}
+
+	agentMessage := rawDiff
 	lastUserMessage := c.lastMessage(ConversationRoleUser)
 	var toolCalls []string
 	if c.cfg.FormatMessage != nil {
@@ -321,7 +351,6 @@ func (c *PTYConversation) updateLastAgentMessageLocked(screen string, timestamp 
 			c.cfg.Logger.Info("Tool call detected", "toolCall", toolCall)
 		}
 	}
-	shouldCreateNewMessage := len(c.messages) == 0 || c.messages[len(c.messages)-1].Role == ConversationRoleUser
 	lastAgentMessage := c.lastMessage(ConversationRoleAgent)
 	if lastAgentMessage.Message == agentMessage {
 		return
