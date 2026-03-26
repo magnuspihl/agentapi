@@ -109,6 +109,24 @@ func findFirstInputBox(lines []string) int {
 	return -1
 }
 
+// isClaudeTUIArtifact returns true if the line consists only of TUI
+// box-drawing characters and whitespace (e.g. "│", "─────", "─╯").
+func isClaudeTUIArtifact(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false // empty lines are handled by trimEmptyLines
+	}
+	for _, r := range trimmed {
+		switch r {
+		case '│', '─', '╭', '╮', '╰', '╯', '┌', '┐', '└', '┘', '║', '═':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func removeClaudeMessageBox(msg string) string {
 	lines := strings.Split(msg, "\n")
 
@@ -118,11 +136,23 @@ func removeClaudeMessageBox(msg string) string {
 	idx := findFirstInputBox(lines)
 	if idx != -1 {
 		lines = lines[:idx]
-		return strings.Join(lines, "\n")
+	} else {
+		// Fall back to the generic bottom-up search
+		messageBoxStartIdx := findGreaterThanMessageBox(lines)
+		if messageBoxStartIdx == -1 {
+			messageBoxStartIdx = findGenericSlimMessageBox(lines)
+		}
+		if messageBoxStartIdx != -1 {
+			lines = lines[:messageBoxStartIdx]
+		}
 	}
 
-	// Fall back to the generic bottom-up search
-	return removeMessageBox(msg)
+	// Strip trailing lines that are pure TUI artifacts (separators, borders)
+	for len(lines) > 0 && isClaudeTUIArtifact(lines[len(lines)-1]) {
+		lines = lines[:len(lines)-1]
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func removeAmpMessageBox(msg string) string {
