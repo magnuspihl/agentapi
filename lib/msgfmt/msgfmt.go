@@ -275,10 +275,17 @@ func formatAmpMessage(message string, userInput string) string {
 	return message
 }
 
+func formatClaudeMessage(message string, userInput string) string {
+	message = RemoveUserInput(message, userInput, AgentTypeClaude)
+	message = removeClaudeMessageBox(message)
+	message = trimEmptyLines(message)
+	return message
+}
+
 func FormatAgentMessage(agentType AgentType, message string, userInput string) string {
 	switch agentType {
 	case AgentTypeClaude:
-		return formatGenericMessage(message, userInput, agentType)
+		return formatClaudeMessage(message, userInput)
 	case AgentTypeGoose:
 		return formatGenericMessage(message, userInput, agentType)
 	case AgentTypeAider:

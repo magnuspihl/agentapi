@@ -79,6 +79,52 @@ func removeOpencodeMessageBox(msg string) string {
 	return strings.Join(lines, "\n")
 }
 
+// findFirstInputBox searches from the top of the message for the first
+// occurrence of a Claude Code input box pattern:
+//
+//	───────────────
+//	❯ (or > with ─── above)
+//	───────────────
+//
+// Returns the index of the first separator line, or -1 if not found.
+// This is used to strip the input prompt and any trailing conversation
+// history that appears in the screen diff when the terminal is very tall
+// and prefix-based diffing captures the entire screen.
+func findFirstInputBox(lines []string) int {
+	// Search for the three-line slim input box pattern: ───/❯/───
+	for i := 0; i < len(lines)-2; i++ {
+		if strings.Contains(lines[i], "───────────────") &&
+			strings.Contains(lines[i+1], "❯") &&
+			strings.Contains(lines[i+2], "───────────────") {
+			return i
+		}
+	}
+	// Fallback: search for ───/> pattern (older Claude Code versions)
+	for i := 0; i < len(lines)-1; i++ {
+		if strings.Contains(lines[i], "───────────────") &&
+			strings.TrimSpace(lines[i+1]) == ">" {
+			return i
+		}
+	}
+	return -1
+}
+
+func removeClaudeMessageBox(msg string) string {
+	lines := strings.Split(msg, "\n")
+
+	// Search from the top for the first input box. This handles the case
+	// where the screen diff captures the entire terminal (very tall terminals)
+	// and the input box appears near the top, after the latest response.
+	idx := findFirstInputBox(lines)
+	if idx != -1 {
+		lines = lines[:idx]
+		return strings.Join(lines, "\n")
+	}
+
+	// Fall back to the generic bottom-up search
+	return removeMessageBox(msg)
+}
+
 func removeAmpMessageBox(msg string) string {
 	lines := strings.Split(msg, "\n")
 	msgBoxEndFound := false
