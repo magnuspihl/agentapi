@@ -40,6 +40,31 @@ func screenDiff(oldScreen, newScreen string, agentType msgfmt.AgentType) string 
 		prefixEnd++
 	}
 
+	// For Claude, attempt to skip over VT100-corrupted lines that break
+	// exact prefix matching. Look ahead up to 5 lines to find where the
+	// screens align again, allowing the prefix to extend further.
+	if agentType == msgfmt.AgentTypeClaude {
+		maxSkip := 5
+		for prefixEnd < oldPrefixLimit && prefixEnd < newPrefixLimit {
+			found := false
+			for skip := 1; skip <= maxSkip && prefixEnd+skip < oldPrefixLimit && prefixEnd+skip < newPrefixLimit; skip++ {
+				if oldLines[prefixEnd+skip] == newLines[prefixEnd+skip] {
+					// Lines match again after skipping — advance past the gap
+					prefixEnd += skip
+					// Continue matching exactly from here
+					for prefixEnd < oldPrefixLimit && prefixEnd < newPrefixLimit && oldLines[prefixEnd] == newLines[prefixEnd] {
+						prefixEnd++
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				break
+			}
+		}
+	}
+
 	// The new content is between prefixEnd and ni (inclusive)
 	if prefixEnd > ni {
 		return ""
