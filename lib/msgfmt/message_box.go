@@ -110,21 +110,21 @@ func findFirstInputBox(lines []string) int {
 }
 
 // isClaudeTUIArtifact returns true if the line consists only of TUI
-// box-drawing characters and whitespace (e.g. "│", "─────", "─╯").
+// box-drawing characters and whitespace (e.g. "│", "  │  ", "─╯").
 func isClaudeTUIArtifact(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" {
-		return false // empty lines are handled by trimEmptyLines
-	}
-	for _, r := range trimmed {
+	hasBoxChar := false
+	for _, r := range line {
+		if r == ' ' || r == '\t' {
+			continue
+		}
 		switch r {
 		case '│', '─', '╭', '╮', '╰', '╯', '┌', '┐', '└', '┘', '║', '═':
-			continue
+			hasBoxChar = true
 		default:
 			return false
 		}
 	}
-	return true
+	return hasBoxChar
 }
 
 func removeClaudeMessageBox(msg string) string {
