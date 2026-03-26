@@ -7,21 +7,13 @@ import (
 )
 
 // screenDiff compares two screen states and attempts to find latest message of the given agent type.
-// It uses positional comparison (common prefix + common suffix) rather than set-based matching,
-// which correctly handles cases where old and new screens share identical lines at different positions.
+// It finds the longest common prefix between old and new screens (the unchanged top portion),
+// then returns everything after that prefix with leading/trailing whitespace trimmed.
 func screenDiff(oldScreen, newScreen string, agentType msgfmt.AgentType) string {
 	oldLines := strings.Split(oldScreen, "\n")
 	newLines := strings.Split(newScreen, "\n")
 
-	// Find longest common suffix (bottom of screen — typically empty lines or static UI)
-	oi := len(oldLines) - 1
-	ni := len(newLines) - 1
-	for oi >= 0 && ni >= 0 && oldLines[oi] == newLines[ni] {
-		oi--
-		ni--
-	}
-
-	// Find longest common prefix (top of screen — typically header/banner)
+	// Find longest common prefix (top of screen — typically header/banner/previous conversation)
 	startOffset := 0
 	// Skip Opencode header lines to avoid false positives from dynamic content
 	// (token count, context percentage, cost) that changes between screens.
@@ -30,44 +22,33 @@ func screenDiff(oldScreen, newScreen string, agentType msgfmt.AgentType) string 
 	}
 
 	prefixEnd := startOffset
-	oldPrefixLimit := oi + 1
-	newPrefixLimit := ni + 1
-	for prefixEnd < oldPrefixLimit && prefixEnd < newPrefixLimit && oldLines[prefixEnd] == newLines[prefixEnd] {
+	limit := len(oldLines)
+	if len(newLines) < limit {
+		limit = len(newLines)
+	}
+	for prefixEnd < limit && oldLines[prefixEnd] == newLines[prefixEnd] {
 		prefixEnd++
 	}
 
-	// The new content is between prefixEnd and ni (inclusive)
-	if prefixEnd > ni {
+	// Everything after the common prefix is potentially new content
+	if prefixEnd >= len(newLines) {
 		return ""
 	}
-	newSectionLines := newLines[prefixEnd : ni+1]
-
-	// Check if the section is all whitespace
-	allEmpty := true
-	for _, line := range newSectionLines {
-		if strings.TrimSpace(line) != "" {
-			allEmpty = false
-			break
-		}
-	}
-	if allEmpty {
-		return ""
-	}
+	newSectionLines := newLines[prefixEnd:]
 
 	// Remove leading and trailing lines which are empty or have only whitespace
-	startLine := 0
-	endLine := len(newSectionLines) - 1
+	startLine := -1
+	endLine := -1
 	for i := range newSectionLines {
 		if strings.TrimSpace(newSectionLines[i]) != "" {
-			startLine = i
-			break
+			if startLine == -1 {
+				startLine = i
+			}
+			endLine = i
 		}
 	}
-	for i := len(newSectionLines) - 1; i >= 0; i-- {
-		if strings.TrimSpace(newSectionLines[i]) != "" {
-			endLine = i
-			break
-		}
+	if startLine == -1 {
+		return ""
 	}
 	return strings.Join(newSectionLines[startLine:endLine+1], "\n")
 }
