@@ -126,6 +126,25 @@ func findFirstInputBox(lines []string) int {
 	return -1
 }
 
+// isGarbledSeparator returns true if the line consists only of box-drawing
+// dash characters (─) and whitespace — i.e. a separator line that may have
+// been corrupted by VT100 rendering. It does NOT match lines with box corners
+// (╭╮╰╯ etc.) which are part of welcome boxes.
+func isGarbledSeparator(line string) bool {
+	hasDash := false
+	for _, r := range line {
+		if r == ' ' || r == '\t' {
+			continue
+		}
+		if r == '─' || r == '═' {
+			hasDash = true
+			continue
+		}
+		return false
+	}
+	return hasDash
+}
+
 // isClaudeTUIArtifact returns true if the line consists only of TUI
 // box-drawing characters and whitespace (e.g. "│", "  │  ", "─╯").
 func isClaudeTUIArtifact(line string) bool {
@@ -185,6 +204,11 @@ func removeClaudeMessageBox(msg string) string {
 		if messageBoxStartIdx != -1 {
 			lines = lines[:messageBoxStartIdx]
 		}
+	}
+
+	// Strip leading lines that are garbled separators (dashes with gaps, no box corners)
+	for len(lines) > 0 && isGarbledSeparator(lines[0]) {
+		lines = lines[1:]
 	}
 
 	// Strip trailing lines that are pure TUI artifacts (separators, borders)
