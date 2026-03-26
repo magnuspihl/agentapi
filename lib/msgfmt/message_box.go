@@ -90,18 +90,35 @@ func removeOpencodeMessageBox(msg string) string {
 // This is used to strip the input prompt and any trailing conversation
 // history that appears in the screen diff when the terminal is very tall
 // and prefix-based diffing captures the entire screen.
+// hasManyDashes returns true if the line contains at least minCount
+// box-drawing dash characters (─). This handles garbled separator lines
+// where VT100 rendering corruption breaks consecutive dashes with spaces.
+func hasManyDashes(line string, minCount int) bool {
+	count := 0
+	for _, r := range line {
+		if r == '─' {
+			count++
+			if count >= minCount {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func findFirstInputBox(lines []string) int {
 	// Search for the three-line slim input box pattern: ───/❯/───
+	// Uses hasManyDashes to handle garbled separators from VT100 corruption
 	for i := 0; i < len(lines)-2; i++ {
-		if strings.Contains(lines[i], "───────────────") &&
+		if hasManyDashes(lines[i], 10) &&
 			strings.Contains(lines[i+1], "❯") &&
-			strings.Contains(lines[i+2], "───────────────") {
+			hasManyDashes(lines[i+2], 10) {
 			return i
 		}
 	}
 	// Fallback: search for ───/> pattern (older Claude Code versions)
 	for i := 0; i < len(lines)-1; i++ {
-		if strings.Contains(lines[i], "───────────────") &&
+		if hasManyDashes(lines[i], 10) &&
 			strings.TrimSpace(lines[i+1]) == ">" {
 			return i
 		}
