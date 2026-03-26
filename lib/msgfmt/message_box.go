@@ -145,6 +145,31 @@ func isGarbledSeparator(line string) bool {
 	return hasDash
 }
 
+// isCorruptedLine returns true if the line shows signs of VT100 rendering
+// corruption — specifically, box-drawing characters (─) appearing between
+// letters, which happens when TUI frame redraws overlap with text content.
+func isCorruptedLine(line string) bool {
+	runes := []rune(strings.TrimSpace(line))
+	if len(runes) < 3 {
+		return false
+	}
+	// Count transitions from letter to ─ or ─ to letter
+	transitions := 0
+	for i := 1; i < len(runes); i++ {
+		prev := runes[i-1]
+		curr := runes[i]
+		if (isLetter(prev) && curr == '─') || (prev == '─' && isLetter(curr)) {
+			transitions++
+		}
+	}
+	// 3+ transitions strongly indicates corruption
+	return transitions >= 3
+}
+
+func isLetter(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+}
+
 // isClaudeTUIArtifact returns true if the line consists only of TUI
 // box-drawing characters and whitespace (e.g. "│", "  │  ", "─╯").
 func isClaudeTUIArtifact(line string) bool {
@@ -225,11 +250,11 @@ func removeClaudeMessageBox(msg string) string {
 	for len(lines) > 0 && isClaudeTUIArtifact(lines[len(lines)-1]) {
 		lines = lines[:len(lines)-1]
 	}
-	// Strip trailing lines that don't contain meaningful content
-	// (e.g. partial old messages from VT100 corruption)
+	// Strip trailing lines that are VT100 corruption artifacts
 	for len(lines) > 0 {
-		trimmed := strings.TrimSpace(lines[len(lines)-1])
-		if trimmed == "" || isGarbledSeparator(lines[len(lines)-1]) {
+		line := lines[len(lines)-1]
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || isGarbledSeparator(line) || isCorruptedLine(line) {
 			lines = lines[:len(lines)-1]
 			continue
 		}
