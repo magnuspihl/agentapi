@@ -264,7 +264,57 @@ func removeClaudeMessageBox(msg string) string {
 	// Strip │ frame borders from line edges
 	lines = stripClaudeFrameBorders(lines)
 
+	// Remove mid-content TUI artifacts and welcome box fragments
+	lines = removeInlineArtifacts(lines)
+
 	return strings.Join(lines, "\n")
+}
+
+// removeInlineArtifacts removes lines from the middle of the message that
+// are clearly TUI rendering artifacts rather than content. Only strips
+// artifacts that appear after the first agent response marker (● or ⏺),
+// preserving welcome box formatting in the initial message.
+func removeInlineArtifacts(lines []string) []string {
+	result := make([]string, 0, len(lines))
+	pastFirstMarker := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !pastFirstMarker && (strings.Contains(line, "●") || strings.Contains(line, "⏺")) {
+			pastFirstMarker = true
+		}
+		if pastFirstMarker {
+			// Remove lines that are purely TUI box-drawing characters
+			if isClaudeTUIArtifact(line) {
+				continue
+			}
+			// Remove Claude welcome box art characters
+			if isWelcomeBoxArt(trimmed) {
+				continue
+			}
+		}
+		result = append(result, line)
+	}
+	return result
+}
+
+// isWelcomeBoxArt returns true if the line contains only Claude welcome
+// box ASCII art characters (block elements used in the logo).
+func isWelcomeBoxArt(line string) bool {
+	if line == "" {
+		return false
+	}
+	for _, r := range line {
+		if r == ' ' || r == '\t' {
+			continue
+		}
+		switch r {
+		case '▐', '▛', '█', '▜', '▌', '▝', '▘', '▀', '▗', '▖', '▞', '▟', '▙', '▚':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func removeAmpMessageBox(msg string) string {
